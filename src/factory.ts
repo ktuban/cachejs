@@ -1,5 +1,7 @@
-import { ICacheOptions, CacheBackend , ICacheProvider, MemoryCache,RedisCache, createRedisClient} from './index.js';
 
+import { ICacheOptions, CacheBackend , ICacheProvider,createRedisClient} from './index.js';
+import {MemoryCache} from "./providers/memory-cache.js";
+import {RedisCache} from "./providers/redis-cache.js";
 
 // Factory for creating new cache instances
 
