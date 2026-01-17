@@ -7,7 +7,7 @@ import {RedisCache} from "./providers/redis-cache.js";
 
 export async function createCache<T = any>(
   backend: CacheBackend = 'memory',
-  options: ICacheOptions = {}
+  options: ICacheOptions = {logger: console}
 ): Promise<ICacheProvider<T>> {
   switch (backend) {
     case 'memory':
@@ -17,11 +17,11 @@ export async function createCache<T = any>(
               
       const redisUrl = process.env["REDIS_URL"];
       if (!redisUrl) {
-        console.warn('REDIS_URL not set, falling back to memory cache');
+        options.logger?.warn('REDIS_URL not set, falling back to memory cache');
         return new MemoryCache<T>(options);
       }
       
-    const redisInstance = await createRedisClient();
+    const redisInstance = await createRedisClient(options.logger);
 
       if(!redisInstance){
         return new MemoryCache<T>(options);

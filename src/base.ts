@@ -1,13 +1,16 @@
+import { LoggerContract } from '@ktuban/structured-logger';
 import { ICacheProvider, ICacheOptions, ICacheStats, CacheBackend, CacheKeyParts, stableHash, createCacheKey } from './index.js';
 
 export abstract class BaseCache<T = any> implements ICacheProvider<T> {
   protected options: Required<ICacheOptions>;
   protected hits = 0;
   protected misses = 0;
+  readonly logger: Required<LoggerContract> | Console
   readonly backend: CacheBackend;
   constructor(cacheBackend: CacheBackend, options: ICacheOptions = {}) {
     this.backend = cacheBackend;
     this.options = this.normalizeOptions(options);
+    this.logger = options.logger || this.options.logger;
   }
 
   private normalizeOptions(options: ICacheOptions): Required<ICacheOptions> {
@@ -16,6 +19,7 @@ export abstract class BaseCache<T = any> implements ICacheProvider<T> {
       maxSize: options.maxSize ?? 1000,  // Memory cache default
       prefix: options.prefix ?? '',      // Empty by default
       enabled: options.enabled ?? true,  // Enabled by default
+      logger: options.logger || console
     };
   }
 

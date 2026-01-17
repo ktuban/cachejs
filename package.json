@@ -1,6 +1,6 @@
 {
   "name": "@ktuban/cachejs",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A lightweight Cache System — Flexible Multi‑Backend Caching for Node.js.",
   "keywords": [
     "cache",
@@ -59,17 +59,17 @@
     "start": "node ./dist/esm/index.js"
   },
   "dependencies": {
-   "safe-stable-stringify": "^2.5.0",
-   "ioredis": "^5.8.2"
-
+    "@ktuban/structured-logger": "^1.1.0",
+    "ioredis": "^5.8.2",
+    "safe-stable-stringify": "^2.5.0"
   },
   "devDependencies": {
     "@types/node": "^25.0.7",
+    "@types/safe-json-stringify": "^1.1.5",
     "@typescript-eslint/eslint-plugin": "^8.53.0",
     "@typescript-eslint/parser": "^8.53.0",
     "eslint": "^9.39.2",
     "rimraf": "^6.1.2",
-    "typescript": "^5.9.3",
-    "@types/safe-json-stringify": "^1.1.5"
+    "typescript": "^5.9.3"
   }
 }

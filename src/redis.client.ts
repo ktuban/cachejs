@@ -1,8 +1,9 @@
 // src/cache/redis.client.ts
+import { LoggerContract } from '@ktuban/structured-logger';
 import {Redis} from 'ioredis';
 
 
-export async function createRedisClient() {
+export async function createRedisClient(logger?: Required<LoggerContract> | Console) {
     const redisUrl = process.env["REDIS_URL"];
   if (!redisUrl) {
     return null;
@@ -11,12 +12,13 @@ export async function createRedisClient() {
   const client = new Redis(redisUrl, {
     maxRetriesPerRequest: 2,
     enableOfflineQueue: false,
-    lazyConnect: true,
+    lazyConnect: true
+    
   });
 
   client.on('error', (err) => {
-    console.warn("Redis connection failed, falling back to memory cache")
-    console.error("redis client error: ",err)
+    logger?.warn("Redis connection failed, falling back to memory cache")
+    logger?.error("redis client error: ",err)
     // Log only – app must not crash
   });
 

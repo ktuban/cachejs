@@ -1,18 +1,18 @@
 import { CacheBackend, createCache, ICacheOptions, ICacheProvider } from "./index.js";
-
+import { LoggerContract } from "@ktuban/structured-logger";
 
 export class CacheRegistry {
   private static instance: CacheRegistry | null = null;
   private caches = new Map<string, ICacheProvider>();
   private defaultCacheName?: CacheBackend;
 
-  private constructor() {
+   constructor(private readonly logger: Required<LoggerContract> | Console = console) {
     // Private constructor for singleton
   }
 
-  static getInstance(): CacheRegistry {
+  static getInstance(logger?:Required<LoggerContract> | Console): CacheRegistry {
     if (!CacheRegistry.instance) {
-      CacheRegistry.instance = new CacheRegistry();
+      CacheRegistry.instance = new CacheRegistry(logger);
     }
     return CacheRegistry.instance;
   }
@@ -33,7 +33,7 @@ export class CacheRegistry {
       this.defaultCacheName = name;
     }
     
-    console.info(`Cache Registery- Registerd new Backend :${name} is Default: ${isDefault}`)
+    this.logger.info(`Cache Registery- Registerd new Backend :${name} is Default: ${isDefault}`)
   }
 
   get(name: CacheBackend): ICacheProvider {
@@ -73,7 +73,7 @@ export class CacheRegistry {
   async clearAll(): Promise<void> {
     const promises = Array.from(this.caches.values()).map(cache =>
       cache.clear().catch(err => {
-        console.warn(`Failed to clear cache: ${err.message}`);
+        this.logger.warn(`Failed to clear cache: ${err.message}`);
       })
     );
     await Promise.all(promises);
@@ -82,7 +82,7 @@ export class CacheRegistry {
   async clearAllByPrefix(prefix: string): Promise<void> {
     const promises = Array.from(this.caches.values()).map(cache =>
       cache.clear().catch(err => {
-        console.warn(`Failed to clear prefix "${prefix}": ${err.message}`);
+        this.logger.warn(`Failed to clear prefix "${prefix}": ${err.message}`);
       })
     );
     
@@ -117,13 +117,13 @@ export class CacheRegistry {
 }
 
 // register cache provider redis | memmory and set one as default 
-export async function setupApplicationCaches() {
+export async function setupApplicationCaches(logger?: Required<LoggerContract> | Console) {
 
   let isRadis = process.env["REDIS_URL"] !== null;
   const defaultCache = await createCache((isRadis ? "redis" : "memory"), { maxSize: (isRadis ? 0 : 1000) });
   isRadis = defaultCache.backend === "redis";
 
-  const registry = CacheRegistry.getInstance();
+  const registry = CacheRegistry.getInstance(logger);
 
   await registry.register(defaultCache.backend, defaultCache, true); // register Default cache
 
@@ -134,6 +134,6 @@ export async function setupApplicationCaches() {
   return registry;
 }
 
-const cacheRegister =  setupApplicationCaches();
+//const cacheRegister =  setupApplicationCaches(logger);
 
-export { cacheRegister }
+//export { cacheRegister }

@@ -1,3 +1,5 @@
+import { LoggerContract } from "@ktuban/structured-logger";
+
 export type CacheBackend = 'memory' | 'redis';
 
 export interface ICacheOptions {
@@ -8,6 +10,7 @@ export interface ICacheOptions {
   
   // Memory cache specific
   maxSize?: number;      // Maximum items (0 = unlimited, undefined = default 1000)
+  logger?: Required<LoggerContract> | Console
 }
 
 export interface ICacheStats {
