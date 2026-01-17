@@ -5,7 +5,7 @@ export abstract class BaseCache<T = any> implements ICacheProvider<T> {
   protected options: Required<ICacheOptions>;
   protected hits = 0;
   protected misses = 0;
-  readonly logger: Required<LoggerContract> | Console
+  readonly logger: Required<LoggerContract>
   readonly backend: CacheBackend;
   constructor(cacheBackend: CacheBackend, options: ICacheOptions = {}) {
     this.backend = cacheBackend;

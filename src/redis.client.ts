@@ -3,7 +3,7 @@ import { LoggerContract } from '@ktuban/structured-logger';
 import {Redis} from 'ioredis';
 
 
-export async function createRedisClient(logger?: Required<LoggerContract> | Console) {
+export async function createRedisClient(logger?: Required<LoggerContract>) {
     const redisUrl = process.env["REDIS_URL"];
   if (!redisUrl) {
     return null;

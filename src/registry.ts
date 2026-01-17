@@ -117,7 +117,7 @@ export class CacheRegistry {
 }
 
 // register cache provider redis | memmory and set one as default 
-export async function setupApplicationCaches(logger?: Required<LoggerContract> | Console) {
+export async function setupApplicationCaches(logger?: Required<LoggerContract>) {
 
   let isRadis = process.env["REDIS_URL"] !== null;
   const defaultCache = await createCache((isRadis ? "redis" : "memory"), { maxSize: (isRadis ? 0 : 1000) });

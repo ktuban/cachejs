@@ -10,7 +10,7 @@ export interface ICacheOptions {
   
   // Memory cache specific
   maxSize?: number;      // Maximum items (0 = unlimited, undefined = default 1000)
-  logger?: Required<LoggerContract> | Console
+  logger?: Required<LoggerContract>
 }
 
 export interface ICacheStats {
