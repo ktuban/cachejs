@@ -1,5 +1,7 @@
 
+import type { LoggerContract } from './types.js';
 import { ICacheOptions, CacheBackend , ICacheProvider,createRedisClient} from './index.js';
+import { CacheError } from "./cacheError.js";
 import {MemoryCache} from "./providers/memory-cache.js";
 import {RedisCache} from "./providers/redis-cache.js";
 
@@ -7,8 +9,9 @@ import {RedisCache} from "./providers/redis-cache.js";
 
 export async function createCache<T = any>(
   backend: CacheBackend = 'memory',
-  options: ICacheOptions = {logger: console}
+  options: ICacheOptions = {}
 ): Promise<ICacheProvider<T>> {
+  const {logger=console}= options
   switch (backend) {
     case 'memory':
       return new MemoryCache<T>(options);
@@ -17,11 +20,11 @@ export async function createCache<T = any>(
               
       const redisUrl = process.env["REDIS_URL"];
       if (!redisUrl) {
-        options.logger?.warn('REDIS_URL not set, falling back to memory cache');
+        logger.warn!('REDIS_URL not set, falling back to memory cache');
         return new MemoryCache<T>(options);
       }
       
-    const redisInstance = await createRedisClient(options.logger);
+    const redisInstance = await createRedisClient(logger);
 
       if(!redisInstance){
         return new MemoryCache<T>(options);
@@ -32,6 +35,6 @@ export async function createCache<T = any>(
       
     default:
       // TypeScript should prevent this, but just in case
-      throw new Error(`Unsupported backend: ${backend}`);
+      throw new CacheError(`Unsupported backend: ${backend}`, "UNSUPPORTED_BACKEND", 400);
   }
 }

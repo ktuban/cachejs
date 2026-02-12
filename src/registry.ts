@@ -1,16 +1,18 @@
 import { CacheBackend, createCache, ICacheOptions, ICacheProvider } from "./index.js";
-import { LoggerContract } from "@ktuban/structured-logger";
+import { CacheError } from "./cacheError.js";
+import type { LoggerContract } from './types.js';
+import { ScopedCache } from "./scoped-cache.js"; // <-- NEW WRAPPER
 
 export class CacheRegistry {
   private static instance: CacheRegistry | null = null;
-  private caches = new Map<string, ICacheProvider>();
-  private defaultCacheName?: CacheBackend;
 
-   constructor(private readonly logger: Required<LoggerContract> | Console = console) {
-    // Private constructor for singleton
-  }
+  // Store ONLY backend instances (MemoryCache, RedisCache)
+  private backends = new Map<CacheBackend, ICacheProvider>();
+  private defaultBackend?: CacheBackend;
 
-  static getInstance(logger?:Required<LoggerContract> | Console): CacheRegistry {
+  constructor(private readonly logger: LoggerContract | Console = console) { }
+
+  static getInstance(logger: LoggerContract | Console = console): CacheRegistry {
     if (!CacheRegistry.instance) {
       CacheRegistry.instance = new CacheRegistry(logger);
     }
@@ -18,95 +20,112 @@ export class CacheRegistry {
   }
 
   static reset(): void {
-    // For testing purposes only
     CacheRegistry.instance = null;
   }
 
-  async register(name: CacheBackend, cache: ICacheProvider, isDefault = false): Promise<void> {
-    if (this.caches.has(name)) {
-      throw new Error(`Cache "${name}" already registered`);
+  // Register backend instance (MemoryCache or RedisCache)
+  async registerBackend(cache: ICacheProvider, isDefault = false): Promise<void> {
+    if (this.backends.has(cache.backend)) {
+      return;
     }
 
-    this.caches.set(name, cache);
+    this.backends.set(cache.backend, cache);
 
-    if (isDefault || !this.defaultCacheName) {
-      this.defaultCacheName = name;
+    if (isDefault) {
+      this.defaultBackend = cache.backend;
     }
-    
-    this.logger.info(`Cache Registery- Registerd new Backend :${name} is Default: ${isDefault}`)
+
+    this.logger.info(
+      `CacheRegistry - Registered backend: ${cache.backend}, default: ${isDefault}`
+    );
   }
 
-  get(name: CacheBackend): ICacheProvider {
-    const cache = this.caches.get(name);
-    if (!cache) {
-      throw new Error(`Cache "${name}" not found. Available: ${Array.from(this.caches.keys()).join(', ')}`);
+  // Return backend instance (internal use only)
+  private getBackend(name: CacheBackend): ICacheProvider {
+
+    const backend = this.backends.get(name);
+    if (!backend) {
+      throw new CacheError(
+        `Backend "${name}" not found. Available: ${Array.from(this.backends.keys()).join(", ")}`,
+        "BACKEND_NOT_FOUND",
+        404
+      );
     }
-    return cache;
+    return backend;
   }
 
-  getOrDefault(opts:{name?: CacheBackend, options?:Partial<ICacheOptions>}={}): ICacheProvider {
-       const {name,options} = opts;
+ // Strict version: if name is provided and not found → throw
+getScoped(opts: { name?: CacheBackend; options?: Partial<ICacheOptions> } = {}): ICacheProvider {
+  const { name, options = {} } = opts;
 
-    if(!name){
-      
-      if(this.defaultCacheName) {
-        return this.get(this.defaultCacheName);
-      }
-    }
-
-    if (name) {
-    let  cache = this.caches.get(name);
-    
-      if (cache) {
-        if(options) cache.setOptions(options);
-        return cache;
-      } 
-
-      if(this.defaultCacheName) {
-        return this.get(this.defaultCacheName);
-      }
-    }
-      
-    throw new Error('No cache registered and no default set');
+  const backendName = name ?? this.defaultBackend;
+  if (!backendName) {
+    throw new CacheError("No backend registered and no default set", "NO_BACKEND_REGISTERED", 500);
   }
 
+  if (!this.backends.has(backendName)) {
+    throw new CacheError(`Backend "${backendName}" not registered`, "BACKEND_NOT_FOUND", 404);
+  }
+
+  const backend = this.backends.get(backendName)!;
+  return new ScopedCache(backend, options);
+}
+
+
+// Soft version: if name missing or invalid → fallback to default
+getScopedOrDefault(opts: { name?: CacheBackend; options?: Partial<ICacheOptions> } = {}): ICacheProvider {
+  const { name, options = {} } = opts;
+
+  // If name provided and exists → use it
+  if (name && this.backends.has(name)) {
+    return new ScopedCache(this.backends.get(name)!, options);
+  }
+
+  // Otherwise fallback to default
+  if (this.defaultBackend && this.backends.has(this.defaultBackend)) {
+    return new ScopedCache(this.backends.get(this.defaultBackend)!, options);
+  }
+
+  throw new CacheError("No backend registered and no default set", "NO_BACKEND_REGISTERED", 500);
+}
+  // Clear all backends (namespace clearing)
   async clearAll(): Promise<void> {
-    const promises = Array.from(this.caches.values()).map(cache =>
-      cache.clear().catch(err => {
-        this.logger.warn(`Failed to clear cache: ${err.message}`);
+    const tasks = Array.from(this.backends.values()).map(backend =>
+      backend.clear().catch(err => {
+        this.logger.warn(`Failed to clear backend "${backend.backend}": ${err.message}`);
       })
     );
-    await Promise.all(promises);
+    await Promise.all(tasks);
   }
 
+  // Clear prefix across all backends
   async clearAllByPrefix(prefix: string): Promise<void> {
-    const promises = Array.from(this.caches.values()).map(cache =>
-      cache.clear().catch(err => {
-        this.logger.warn(`Failed to clear prefix "${prefix}": ${err.message}`);
+    const tasks = Array.from(this.backends.values()).map(backend =>
+      backend.deleteByPrefix(prefix).catch(err => {
+        this.logger.warn(`Failed to clear prefix "${prefix}" on backend "${backend.backend}": ${err.message}`);
       })
     );
-    
-    await Promise.all(promises);
+    await Promise.all(tasks);
   }
 
-  list(): string[] {
-    return Array.from(this.caches.keys());
+  listBackends(): CacheBackend[] {
+    return Array.from(this.backends.keys());
   }
 
-  has(name: string): boolean {
-    return this.caches.has(name);
+  hasBackend(name: CacheBackend): boolean {
+    return this.backends.has(name);
   }
 
-  getDefaultName(): string | undefined {
-    return this.defaultCacheName;
+  getDefaultBackend(): CacheBackend | undefined {
+    return this.defaultBackend;
   }
 
   async getStats(): Promise<Record<string, any>> {
     const stats: Record<string, any> = {};
 
-    for (const [name, cache] of this.caches) {
+    for (const [name, backend] of this.backends) {
       try {
-        stats[name] = await cache.getStats();
+        stats[name] = await backend.getStats();
       } catch (err: any) {
         stats[name] = { error: err.message };
       }
@@ -116,24 +135,24 @@ export class CacheRegistry {
   }
 }
 
-// register cache provider redis | memmory and set one as default 
-export async function setupApplicationCaches(logger?: Required<LoggerContract>) {
+export async function setupApplicationCaches(logger?: LoggerContract | Console) {
+  let isRedis = process.env["REDIS_URL"] !== undefined;
 
-  let isRadis = process.env["REDIS_URL"] !== null;
-  const defaultCache = await createCache((isRadis ? "redis" : "memory"), { maxSize: (isRadis ? 0 : 1000) });
-  isRadis = defaultCache.backend === "redis";
+  const defaultBackend = await createCache(
+    isRedis ? "redis" : "memory",
+    { maxSize: isRedis ? 0 : 1000 }
+  );
+
+  isRedis = defaultBackend.backend === "redis";
 
   const registry = CacheRegistry.getInstance(logger);
 
-  await registry.register(defaultCache.backend, defaultCache, true); // register Default cache
+  await registry.registerBackend(defaultBackend, true);
 
-  if (isRadis) { // if its default aws radis then create memmory instance
-    const secondaryCache = await createCache("memory");
-    await registry.register(secondaryCache.backend, secondaryCache);
+  if (isRedis) {
+    const memoryBackend = await createCache("memory");
+    await registry.registerBackend(memoryBackend);
   }
+
   return registry;
 }
-
-//const cacheRegister =  setupApplicationCaches(logger);
-
-//export { cacheRegister }

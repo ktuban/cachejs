@@ -1,21 +1,23 @@
 {
   "name": "@ktuban/cachejs",
-  "version": "1.1.1",
-  "description": "A lightweight Cache System — Flexible Multi‑Backend Caching for Node.js.",
-  "keywords": [
-    "cache",
-    "memory",
-    "redis",
-    "backend",
-    "nodejs",
-    "library"
-  ],
+  "version": "1.1.2",
+  "description": "High-performance multi-level caching system for Node.js with Redis, memory, and hybrid strategies. Features include decorator support, scoped caches, stable hashing, and monitoring.",
   "license": "MIT",
   "author": {
     "name": "K Tuban",
     "url": "https://github.com/ktuban"
   },
-  "private": false,
+  "funding": [
+    {
+      "type": "paypal",
+      "url": "https://paypal.me/Khaliltuban"
+    },
+    {
+      "type": "ko-fi",
+      "url": "https://ko-fi.com/ktuban"
+    }
+  ],
+  "private": true,
   "type": "module",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
@@ -50,26 +52,33 @@
   "scripts": {
     "clean": "rimraf dist",
     "build": "npm run clean && npm run build:esm && npm run build:cjs && npm run build:types",
-    "build:esm": "tsc --project tsconfig.json --outDir dist/esm --module ES2022",
-    "build:cjs": "tsc --project tsconfig.json --outDir dist/cjs --module CommonJS --declaration false",
-    "build:types": "tsc --project tsconfig.types.json --emitDeclarationOnly --outDir dist/types",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json", 
+    "build:types": "tsc -p tsconfig.types.json",
     "lint": "eslint . --ext .ts",
-    "prepare": "npm run build",
-    "test": "node ./dist/esm/test.js",
-    "start": "node ./dist/esm/index.js"
+    "start": "node ./dist/esm/index.js",
+    "test": "jest --no-cache",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
-    "@ktuban/structured-logger": "^1.1.0",
-    "ioredis": "^5.8.2",
-    "safe-stable-stringify": "^2.5.0"
+    "ioredis": "^5.9.2",
+    "lru-cache": "^11.2.5"
   },
   "devDependencies": {
-    "@types/node": "^25.0.7",
-    "@types/safe-json-stringify": "^1.1.5",
-    "@typescript-eslint/eslint-plugin": "^8.53.0",
-    "@typescript-eslint/parser": "^8.53.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.0.10",
+    "typescript": "^5.9.3",
     "eslint": "^9.39.2",
-    "rimraf": "^6.1.2",
-    "typescript": "^5.9.3"
-  }
+    "rimraf": "^6.1.2"
+  },
+  "keywords": [
+    "cache",
+    "caching",
+    "redis",
+    "memory",
+    "lru-cache",
+    "typescript",
+    "nodejs"
+  ]
 }

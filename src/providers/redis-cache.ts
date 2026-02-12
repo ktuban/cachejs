@@ -1,16 +1,12 @@
 import { Redis as RedisClient } from 'ioredis';
-import { BaseCache ,CacheBackend, ICacheOptions} from '../index.js';
-import {stringify} from "safe-stable-stringify"; 
+import { BaseCache, ICacheOptions } from '../index.js';
+import { stringify } from 'safe-stable-stringify';
 
 export class RedisCache<T = any> extends BaseCache<T> {
   private redis: RedisClient;
-  
-  constructor(
-    redisClient: RedisClient,
-    options: ICacheOptions = {}
-  ) {
-     // Redis doesn't use maxSize, so we can ignore it or set to 0
-    super("redis",{ ...options, maxSize: 0 });
+
+  constructor(redisClient: RedisClient, options: ICacheOptions = {}) {
+    super("redis", { ...options, maxSize: 0 });
     this.redis = redisClient;
   }
 
@@ -19,102 +15,105 @@ export class RedisCache<T = any> extends BaseCache<T> {
       this.incrementMiss();
       return undefined;
     }
-    
+
     try {
-      const value = await this.redis.get(this.buildKey(key));
-      
-      if (value === null) {
+      const raw = await this.redis.get(this.buildKey(key));
+
+      if (raw === null) {
         this.incrementMiss();
         return undefined;
       }
-      
-      this.incrementHit();
-      return JSON.parse(value) as T;
-    } catch (error) {
-      // On Redis error, treat as miss (fail-open)
+
+      try {
+        const parsed = JSON.parse(raw) as T;
+        this.incrementHit();
+        return parsed;
+      } catch (err:any) {
+        this.incrementMiss();
+        this.logger.error(`Redis parse error for key ${key}`, {err});
+        return undefined;
+      }
+
+    } catch (err) {
       this.incrementMiss();
-      console.error('Redis get error:', error);
+      this.logger.error(`Redis get error for key ${key}`, {err});
       return undefined;
     }
   }
-  
+
   async set(key: string, value: T, ttl?: number): Promise<void> {
     if (!this.options.enabled) return;
-    
+
     try {
       const serialized = stringify(value) || '';
       const finalTtl = ttl ?? this.options.ttl;
-      
+
       if (finalTtl > 0) {
         await this.redis.set(this.buildKey(key), serialized, 'PX', finalTtl);
       } else {
         await this.redis.set(this.buildKey(key), serialized);
       }
-    } catch (error) {
-      console.error('Redis set error:', error);
-      // Fail silently - caching is best effort
+    } catch (err) {
+      this.logger.error(`Redis set error for key ${key}`, {err});
     }
   }
-  
+
+  async getKeys(pattern: string): Promise<string[]> {
+  const redisPattern = this.buildKey('') + pattern.replace(/^\*/, '');
+  const keys: string[] = [];
+  let cursor = '0';
+
+  try {
+    do {
+      const [nextCursor, batch] = await this.redis.scan(
+        cursor,
+        'MATCH',
+        redisPattern,
+        'COUNT',
+        100
+      );
+
+      cursor = nextCursor;
+
+      for (const key of batch) {
+        keys.push(key);
+      }
+
+    } while (cursor !== '0');
+
+    return keys;
+
+  } catch (err) {
+    this.logger.error('Redis getKeys error', {err});
+    return [];
+  }
+}
+
   async delete(key: string): Promise<boolean> {
     try {
       const result = await this.redis.del(this.buildKey(key));
       return result > 0;
-    } catch (error) {
-      console.error('Redis delete error:', error);
+    } catch (err) {
+      this.logger.error(`Redis delete error for key ${key}`, {err});
       return false;
     }
   }
-  
+
   async has(key: string): Promise<boolean> {
     try {
       const result = await this.redis.exists(this.buildKey(key));
       return result === 1;
-    } catch (error) {
-      console.error('Redis exists error:', error);
+    } catch (err) {
+      this.logger.error(`Redis exists error for key ${key}`, {err});
       return false;
     }
   }
-  
-  // Efficient prefix clearing for Redis using SCAN
+
   async clearByPrefix(): Promise<void> {
     try {
-      const pattern = this.buildKey(this.options.prefix) + '*';
-      
-      let cursor = '0';
-      const batchSize = 100;
-      
-      do {
-        const [nextCursor, keys] = await this.redis.scan(
-          cursor,
-          'MATCH',
-          pattern,
-          'COUNT',
-          batchSize
-        );
-        
-        cursor = nextCursor;
-        
-        if (keys.length > 0) {
-          await this.redis.del(...keys);
-        }
-        
-        // Early exit if no keys found
-        if (keys.length === 0 && cursor === '0') break;
-        
-      } while (cursor !== '0');
-    } catch (error) {
-      console.error('Redis clearByPrefix error:', error);
-    }
-  }
-  
-  async size(): Promise<number> {
-    try {
-      // Use SCAN to count keys with our prefix (more efficient than KEYS)
-      let count = 0;
-      let cursor = '0';
       const pattern = this.buildKey('') + '*';
-      
+      let cursor = '0';
+
       do {
         const [nextCursor, keys] = await this.redis.scan(
           cursor,
@@ -123,27 +122,72 @@ export class RedisCache<T = any> extends BaseCache<T> {
           'COUNT',
           100
         );
-        
+
+        cursor = nextCursor;
+
+        if (keys.length > 0) {
+          await this.redis.del(...keys);
+        }
+
+      } while (cursor !== '0');
+
+    } catch (err) {
+      this.logger.error('Redis clearByPrefix error', {err});
+    }
+  }
+
+  async size(): Promise<number> {
+    try {
+      let count = 0;
+      let cursor = '0';
+      const pattern = this.buildKey('') + '*';
+
+      do {
+        const [nextCursor, keys] = await this.redis.scan(
+          cursor,
+          'MATCH',
+          pattern,
+          'COUNT',
+          100
+        );
+
         cursor = nextCursor;
         count += keys.length;
-        
-        if (keys.length === 0 && cursor === '0') break;
-        
+
       } while (cursor !== '0');
-      
+
       return count;
-    } catch (error) {
-      console.error('Redis size error:', error);
+
+    } catch (err) {
+      this.logger.error('Redis size error', {err});
       return 0;
     }
   }
 
-  override  async getStats() {
-    const baseStats = await super.getStats();
-    // Redis doesn't have maxSize or evictions
-    return baseStats;
+  override async getStats() {
+    const base = await super.getStats();
+    return {
+      ...base,
+      ttl: this.options.ttl
+    };
+  }
+
+  override async disconnect(): Promise<void> {
+    await super.disconnect(); // Clear namespace and reset stats
+    
+    // Close Redis connection if it's still open
+    if (this.redis && this.redis.status !== 'end' && this.redis.status !== 'close') {
+      try {
+        await this.redis.quit();
+      } catch (err) {
+        this.logger.warn?.('Error closing Redis connection', { error: err });
+        // Try force disconnect if quit fails
+        this.redis.disconnect();
+      }
+    }
+  }
+
+  override async dispose(): Promise<void> {
+    return this.disconnect();
   }
 }
-
-
-  

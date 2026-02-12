@@ -1,16 +1,22 @@
-import { LoggerContract } from "@ktuban/structured-logger";
+/** Minimal logger contract used by this package. */
+export interface LoggerContract {
+  debug: (message: string, meta?: any) => void;
+  info: (message: string, meta?: any) => void;
+  warn: (message: string, meta?: any) => void;
+  error: (message: string, meta?: any) => void;
+}
 
-export type CacheBackend = 'memory' | 'redis';
+export type CacheBackend = "memory" | "redis";
 
 export interface ICacheOptions {
   // Core options for all caches
-  ttl?: number;          // Milliseconds (0 = no expiration)
-  prefix?: string;       // For key namespacing
-  enabled?: boolean;     // Enable/disable cache
-  
-  // Memory cache specific
-  maxSize?: number;      // Maximum items (0 = unlimited, undefined = default 1000)
-  logger?: Required<LoggerContract>
+  ttl?: number;                 // Milliseconds (0 = no expiration)
+  prefix?: string;              // Key namespace
+  enabled?: boolean;            // Enable/disable cache
+  logger?: LoggerContract | Console
+
+  // Memory-cache specific
+  maxSize?: number;             // Maximum items (undefined = default 1000)
 }
 
 export interface ICacheStats {
@@ -19,12 +25,15 @@ export interface ICacheStats {
   hitRate: number;
   size: number;
   backend: CacheBackend;
-  evictions?: number;    // Memory cache tracks evictions
-  maxSize?: number;      // Memory cache max size
+
+  // Memory-cache specific
+  evictions?: number;
+  maxSize?: number;
+  ttl?: number;
 }
 
 export interface ICacheEntry<T> {
   value: T;
-  expiresAt?: number;
-  accessedAt: number;
+  // No expiresAt — TTL is backend-managed
+  // No accessedAt — LRU handles recency internally
 }

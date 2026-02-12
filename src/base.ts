@@ -1,35 +1,52 @@
-import { LoggerContract } from '@ktuban/structured-logger';
-import { ICacheProvider, ICacheOptions, ICacheStats, CacheBackend, CacheKeyParts, stableHash, createCacheKey } from './index.js';
+import {
+  ICacheProvider,
+  ICacheOptions,
+  ICacheStats,
+  CacheBackend,
+  CacheKeyParts,
+  stableHash
+} from './index.js';
+import type { LoggerContract } from './types.js';
 
+/**
+ * BaseCache
+ *
+ * Abstract base class for all cache backends (MemoryCache, RedisCache).
+ * Provides common option handling, stats tracking, and utility methods.
+ */
 export abstract class BaseCache<T = any> implements ICacheProvider<T> {
   protected options: Required<ICacheOptions>;
   protected hits = 0;
   protected misses = 0;
-  readonly logger: Required<LoggerContract>
+
+  readonly logger: LoggerContract | Console;
   readonly backend: CacheBackend;
+
   constructor(cacheBackend: CacheBackend, options: ICacheOptions = {}) {
     this.backend = cacheBackend;
     this.options = this.normalizeOptions(options);
-    this.logger = options.logger || this.options.logger;
+    this.logger = this.options.logger;
   }
 
   private normalizeOptions(options: ICacheOptions): Required<ICacheOptions> {
     return {
-      ttl: options.ttl ?? 300_000,       // 5 minutes default
-      maxSize: options.maxSize ?? 1000,  // Memory cache default
-      prefix: options.prefix ?? '',      // Empty by default
-      enabled: options.enabled ?? true,  // Enabled by default
-      logger: options.logger || console
+      ttl: options.ttl ?? 300_000,
+      maxSize: options.maxSize ?? 1000,
+      prefix: options.prefix ?? '',   // default empty prefix
+      enabled: options.enabled ?? true,
+      logger: options.logger ?? console
     };
   }
 
-  generateKey(cachekeypart: Partial<CacheKeyParts>): string {
-    const { resource,operation,params} = cachekeypart;
+  generateKey(parts: Partial<CacheKeyParts>): string {
+    const { resource, operation, params } = parts;
+
     if (!params) {
-      return `${this.options.prefix}:${resource}:${operation}`;
+      return this.buildKey(`${resource}:${operation}`);
     }
+
     const hash = stableHash(params);
-    return `${this.options.prefix}:${resource}:${operation}:${hash}`;
+    return this.buildKey(`${resource}:${operation}:${hash}`);
   }
 
   getOptions(): ICacheOptions {
@@ -38,7 +55,7 @@ export abstract class BaseCache<T = any> implements ICacheProvider<T> {
 
   setOptions(options: Partial<ICacheOptions>): void {
     const oldOptions = { ...this.options };
-    this.options = { ...this.options, ...options };
+    this.options = this.normalizeOptions({ ...this.options, ...options });
     this.onOptionsChanged?.(oldOptions, this.options);
   }
 
@@ -56,26 +73,46 @@ export abstract class BaseCache<T = any> implements ICacheProvider<T> {
   }
 
   protected buildKey(key: string): string {
-    return `${this.options.prefix}${key}`;
+    return this.options.prefix
+      ? `${this.options.prefix}:${key}`
+      : key;
   }
 
-  // Optional hook for subclasses
+  async deleteByPattern(pattern: string): Promise<void> {
+    const keys = await this.getKeys(pattern);
+
+    for (const key of keys) {
+      try {
+        await this.delete(key);
+      } catch (err: any) {
+        this.logger.warn(
+          `Failed to delete key "${key}" for pattern "${pattern}": ${err.message}`
+        );
+      }
+    }
+  }
+
+  async deleteByPrefix(prefix: string): Promise<void> {
+    return this.deleteByPattern(`${prefix}*`);
+  }
+
   protected onOptionsChanged?(oldOptions: ICacheOptions, newOptions: ICacheOptions): void;
 
-  // Abstract methods
   abstract get(key: string): Promise<T | undefined>;
   abstract set(key: string, value: T, ttl?: number): Promise<void>;
   abstract delete(key: string): Promise<boolean>;
   abstract has(key: string): Promise<boolean>;
 
+  abstract getKeys(pattern: string): Promise<string[]>;
   abstract clearByPrefix(): Promise<void>;
   abstract size(): Promise<number>;
 
   async clear(): Promise<void> {
-    this.clearByPrefix();
+    await this.clearByPrefix();
     this.hits = 0;
     this.misses = 0;
   }
+
   async getStats(): Promise<ICacheStats> {
     const size = await this.size();
     return {
@@ -85,5 +122,15 @@ export abstract class BaseCache<T = any> implements ICacheProvider<T> {
       size,
       backend: this.backend
     };
+  }
+
+  async disconnect(): Promise<void> {
+    await this.clear();
+    this.hits = 0;
+    this.misses = 0;
+  }
+
+  async dispose(): Promise<void> {
+    return this.disconnect();
   }
 }
