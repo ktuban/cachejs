@@ -6,7 +6,7 @@
 [![Support via PayPal](https://img.shields.io/badge/Support-PayPal-blue.svg)](https://paypal.me/KhalilTuban)
 [![Ko‑fi](https://img.shields.io/badge/Support-Ko--fi-red.svg)](https://ko-fi.com/ktuban)
 
-High-performance **multi-level caching system** for Node.js with Redis, memory, and hybrid strategies. Features include decorator support, scoped caches, stable hashing, and monitoring.
+High-performance caching system for Node.js with Redis, memory. Features support, scoped caches, stable hashing, and monitoring.
 
 ## ✨ Features
 
