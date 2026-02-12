@@ -83,8 +83,8 @@ const userCache = new ScopedCache(backend, {
 // Automatically prefixed as "users:profile:123"
 await userCache.set("profile:123", userData);
 const data = await userCache.get("profile:123");
-```
 
+```
 ---
 
 ## 📖 API Reference
