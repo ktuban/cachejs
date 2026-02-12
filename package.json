@@ -53,7 +53,7 @@
     "clean": "rimraf dist",
     "build": "npm run clean && npm run build:esm && npm run build:cjs && npm run build:types",
     "build:esm": "tsc -p tsconfig.esm.json",
-    "build:cjs": "tsc -p tsconfig.cjs.json", 
+    "build:cjs": "tsc -p tsconfig.cjs.json",
     "build:types": "tsc -p tsconfig.types.json",
     "lint": "eslint . --ext .ts",
     "start": "node ./dist/esm/index.js",
@@ -63,14 +63,15 @@
   },
   "dependencies": {
     "ioredis": "^5.9.2",
-    "lru-cache": "^11.2.5"
+    "lru-cache": "^11.2.5",
+    "safe-stable-stringify": "^2.5.0"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^25.0.10",
-    "typescript": "^5.9.3",
     "eslint": "^9.39.2",
-    "rimraf": "^6.1.2"
+    "rimraf": "^6.1.2",
+    "typescript": "^5.9.3"
   },
   "keywords": [
     "cache",
